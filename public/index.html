@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Javascript Stenography Application</title>
+    <style>
+        input[type=text], select {
+            width: 30%;
+            padding: 12px 20px;
+            margin: 8px 0;
+            display: inline-block;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button:hover{
+            cursor: pointer;
+        }
+    </style>
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="text/javascript">
+        function checkReloaded(){
+            let data = localStorage.getItem('is_reloaded') ? localStorage.getItem('is_reloaded') : localStorage.setItem('is_reloaded', 1);
+            if(data == 1){
+                localStorage.removeItem('is_reloaded');
+                alert('This Page is Reloaded!!!!');
+                window.open('javascript:window.open("", "_self", "");window.close();', '_self');
+            }
+        }
+        checkReloaded()
+        setTimeout(function(){},3000)
+        var userName = prompt('Please enter your name :');
+        var socket = io();
+        var myID;
+        var encodedImage;
+        var users;
+        socket.on('myID', function(id) {
+            myID = id;
+            socket.emit('myUserName', {id: myID, name: userName});
+        });
+        socket.on('userList', function(data) {
+            users = data;
+            var userList = document.getElementById('users');
+            userList.innerHTML = '';
+            for (var i = 0; i < data.length; i++) {
+                var user = document.createElement('li');
+                user.innerHTML = data[i].id == myID ? '<button style="width: 90%; font-weight: bold; margin:5px 0px; border: none; color: white;  padding: 5px 15px; text-align: center;text-decoration: none;display: inline-block; font-size: 14px; background-color: #008CBA;">ME</button>': '<button onClick="postImage(\''+myID+'\',\''+data[i].id+'\')" style="width: 90%;border: none; color: white;  padding: 5px 15px; text-align: center;text-decoration: none;display: inline-block; font-size: 14px; background-color: #008CBA; margin:5px 0px;">Send Encoded Image to '+data[i].userName+'</button>';
+                userList.appendChild(user);
+            }
+        });
+        let senderName;
+        socket.on('encodedImage', function(data){
+            if(data.user==myID){
+                encodedImage = data.image;
+                for(var i = 0; i<users.length; i++){
+                    if(data.sender == users[i].id){
+                        senderName=  users[i].userName;
+                    }
+                }
+                document.querySelector('.responseImg').innerHTML = 'Sended from <b>'+senderName+'</b> <br /> <img id="#encodedImage" style="width: 100%; height: 100%;" src="http://localhost:3000/upload/'+data.image+'" />';
+            }
+        })
+        async function postImage(userID, forWho){
+            const fileInput = document.querySelector('#fileInput') ;
+            const messageInput = document.querySelector('#message');
+            if(typeof fileInput.files[0] === 'undefined'){
+                alert('Please select a image ');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('image', fileInput.files[0]);
+            formData.append('message', messageInput.value);
+            formData.append('id', userID);
+            formData.append('forWho', forWho);
+            const options = {
+                method: 'POST',
+                body: formData,
+                //headers: {
+                //    'Content-Type': 'multipart/form-data',
+                //}
+            };
+            
+            fetch('/encode', options);
+        }
+        async function decodeImage(){
+            console.log(encodedImage)
+            if(typeof encodedImage === 'undefined'){
+                alert('Image not found!');
+                return;
+            }
+            const options = {
+                method: 'GET',
+            };
+            fetch('/decode/'+encodedImage+'', options).then( async (res)=>{
+                var text = await res.text();
+                alert(JSON.parse(text).msg);
+                document.querySelector('.secretMessage').innerHTML = 'Secret message is <br /><h1>'+JSON.parse(text).msg+'</h1>';
+             })
+        }
+    </script>
+</head>
+<body onbeforeunload=" return 'Are you really want to perform the action?'">
+    <div style="display: flex; justify-content: center; align-items: center; flex-direction: column; gap: 10px; height: 100vh;">
+        <input type="file" id="fileInput" name="fileInput" />
+        <input type="text" name="message" id="message" placeholder="Your Secret Message"/>
+        <div style="display: flex; width: 90%; flex-direction: column; gap: 10px;">
+            <div style="display: flex; width: 100%; gap: 10px;">
+                <ul id="users"  style="list-style: none; text-align: center;">
+                </ul>
+                <div style="display: flex; flex-direction: column; width: 100%;">
+                    <div class="secretMessage">
+                    
+                    </div>
+                    <div class="responseImg" style="width: 100%; min-width: 50%; height: 50vh; background-color: #e7e7e7; display: flex; justify-content: center; align-items: center; flex-direction: column;">
+                        Waiting for encoded image...
+                    </div>
+                </div>
+            </div>
+            <button onclick="decodeImage()" style="background-color: #4CAF50; border: none; color: white;  padding: 15px 32px; text-align: center;text-decoration: none;display: inline-block; font-size: 16px;">Decode the incoming image</button>
+        </div>
+    </div>
+</body>
+</html>
